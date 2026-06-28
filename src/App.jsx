@@ -24,6 +24,10 @@ const getCitas = () => supaFetch("/citas?order=fecha,hora");
 const insertCita = (cita) => supaFetch("/citas", { method:"POST", body: JSON.stringify(cita) });
 const updateCita = (id, data) => supaFetch(`/citas?id=eq.${id}`, { method:"PATCH", body: JSON.stringify(data) });
 
+// ── LocalStorage (para config local) ─────────────────────
+const load = (k,fb) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch { return fb; } };
+const save = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} };
+
 
 
 const C = {
