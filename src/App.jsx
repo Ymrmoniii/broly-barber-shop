@@ -39,7 +39,7 @@ const C = {
 
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DIAS_SEMANA = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
-const PIN_BARBERO = "1234";
+const PIN_BARBERO_DEFAULT = "1234";
 
 const SERVICIOS_DEFAULT = [
   { id:"s1", nombre:"Corte clásico",     precio:5000,  duracion:30, emoji:"✂️" },
@@ -568,7 +568,7 @@ function VistaCliente({ servicios, citas, setCitas, agregarCita, horasDisponible
 }
 
 // ── DASHBOARD BARBERO ─────────────────────────────────────
-function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServicios, insumos, setInsumos, horasDisponibles, setHorasDisponibles, diasBloqueados, setDiasBloqueados, ubicaciones, setUbicaciones, datosBancarios, setDatosBancarios, configPremio, setConfigPremio }) {
+function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServicios, insumos, setInsumos, horasDisponibles, setHorasDisponibles, diasBloqueados, setDiasBloqueados, ubicaciones, setUbicaciones, datosBancarios, setDatosBancarios, configPremio, setConfigPremio, pinBarbero, setPinBarbero }) {
   const [tab, setTab] = useState("hoy");
   const [nuevoServ, setNuevoServ] = useState({ nombre:"", precio:"", duracion:"", emoji:"✂️" });
   const [editServId, setEditServId] = useState(null);
@@ -579,6 +579,8 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
   const [mesVista, setMesVista] = useState(() => { const d=new Date(); return {m:d.getMonth(),a:d.getFullYear()}; });
   const [citaDetalle, setCitaDetalle] = useState(null);
   const [ubicForm, setUbicForm] = useState({ ciudad:"", desde:"", hasta:"" });
+  const [pinForm, setPinForm] = useState({ actual:"", nuevo:"", confirmar:"" });
+  const [pinMsg, setPinMsg] = useState(null);
 
   const hoy = isoHoy();
   const mesActual = new Date().toISOString().slice(0,7);
@@ -1031,14 +1033,14 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                       <div style={{ background:C.bg,borderRadius:8,padding:"8px 10px",marginBottom:8 }}>
                         <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
                           <span style={{ fontSize:11,color:C.muted }}>Fidelización (cada 10 cortes = 1 gratis)</span>
-                          <span style={{ fontSize:11,fontWeight:700,color:C.gold }}>{cl.visitas.length%10}/10</span>
+                          <span style={{ fontSize:11,fontWeight:700,color:C.gold }}>{cl.visitas.length%configPremio.visitas}/{configPremio.visitas}</span>
                         </div>
                         <div style={{ display:"flex",gap:3 }}>
-                          {Array.from({length:10},(_,i)=>(
-                            <div key={i} style={{ flex:1,height:6,borderRadius:3,background:i<cl.visitas.length%10?C.gold:C.border }}/>
+                          {Array.from({length:configPremio.visitas},(_,i)=>(
+                            <div key={i} style={{ flex:1,height:6,borderRadius:3,background:i<cl.visitas.length%configPremio.visitas?C.gold:C.border }}/>
                           ))}
                         </div>
-                        {cl.visitas.length%10===0&&cl.visitas.length>0&&(
+                        {cl.visitas.length%configPremio.visitas===0&&cl.visitas.length>0&&(
                           <div style={{ fontSize:11,color:C.gold,marginTop:4,fontWeight:700 }}>🎉 ¡Le corresponde un corte gratis!</div>
                         )}
                       </div>
@@ -1177,7 +1179,7 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
                   <span style={{ fontSize:13, color:C.white, flexShrink:0 }}>Premio cada</span>
                   <div style={{ display:"flex", gap:6 }}>
-                    {[5,6,7,8,10,12,15].map(n=>(
+                    {[5,6,7,8,10].map(n=>(
                       <button key={n} onClick={()=>setConfigPremio(p=>({...p,visitas:n}))}
                         style={{ width:36, height:36, borderRadius:9, border:`2px solid ${configPremio.visitas===n?C.gold:C.border}`, background:configPremio.visitas===n?`${C.gold}22`:C.bg, color:configPremio.visitas===n?C.gold:C.muted, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
                         {n}
@@ -1333,12 +1335,37 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
               }
             </Panel>
 
-            {/* PIN */}
-            <Panel>
-              <SecTitle>🔐 Seguridad</SecTitle>
-              <div style={{ fontSize:13,color:C.muted,marginBottom:8 }}>PIN de acceso actual: <span style={{ color:C.gold,fontWeight:700 }}>{PIN_BARBERO}</span></div>
-              <div style={{ fontSize:12,color:C.muted }}>Para cambiar el PIN edita la variable PIN_BARBERO en el código fuente.</div>
-            </Panel>
+              {/* PIN — cambiar desde la app */}
+              <Panel>
+                <SecTitle>🔐 Cambiar PIN de acceso</SecTitle>
+                <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
+                  <Field value={pinForm.actual} onChange={e=>setPinForm(p=>({...p,actual:e.target.value}))}
+                    placeholder="PIN actual" type="password" style={{ letterSpacing:4, textAlign:"center" }}/>
+                  <Field value={pinForm.nuevo} onChange={e=>setPinForm(p=>({...p,nuevo:e.target.value}))}
+                    placeholder="PIN nuevo (4 dígitos)" type="password" style={{ letterSpacing:4, textAlign:"center" }}/>
+                  <Field value={pinForm.confirmar} onChange={e=>setPinForm(p=>({...p,confirmar:e.target.value}))}
+                    placeholder="Confirmar PIN nuevo" type="password" style={{ letterSpacing:4, textAlign:"center" }}/>
+                </div>
+                <Btn onClick={()=>{
+                  if(pinForm.actual !== pinBarbero){ setPinMsg({tipo:"error", txt:"PIN actual incorrecto"}); return; }
+                  if(pinForm.nuevo.length < 4){ setPinMsg({tipo:"error", txt:"El PIN debe tener al menos 4 dígitos"}); return; }
+                  if(pinForm.nuevo !== pinForm.confirmar){ setPinMsg({tipo:"error", txt:"Los PINs nuevos no coinciden"}); return; }
+                  setPinBarbero(pinForm.nuevo);
+                  setPinForm({actual:"",nuevo:"",confirmar:""});
+                  setPinMsg({tipo:"ok", txt:"✅ PIN cambiado correctamente"});
+                  setTimeout(()=>setPinMsg(null), 3000);
+                }} style={{ width:"100%", marginBottom:8 }}>
+                  Cambiar PIN
+                </Btn>
+                {pinMsg && (
+                  <div style={{ padding:"9px 12px", borderRadius:9, fontSize:12, fontWeight:700,
+                    background:pinMsg.tipo==="ok"?`${C.success}18`:`${C.danger}18`,
+                    border:`1px solid ${pinMsg.tipo==="ok"?C.success:C.danger}44`,
+                    color:pinMsg.tipo==="ok"?C.success:C.danger }}>
+                    {pinMsg.txt}
+                  </div>
+                )}
+              </Panel>
           </>
         )}
       </div>
@@ -1400,6 +1427,7 @@ export default function App() {
     tipo:"Cuenta Vista"
   }));
   const [configPremio,   setConfigPremio]   = useState(()=>load("bb_premio",{ visitas:10, premio:"Corte gratis", sorpresa:false, activo:true }));
+  const [pinBarbero,     setPinBarbero]     = useState(()=>load("bb_pin", PIN_BARBERO_DEFAULT));
 
   useEffect(()=>save("bb_vista",        vista),          [vista]);
   useEffect(()=>save("bb_servicios",    servicios),      [servicios]);
@@ -1409,9 +1437,10 @@ export default function App() {
   useEffect(()=>save("bb_ubicaciones",  ubicaciones),    [ubicaciones]);
   useEffect(()=>save("bb_banco",        datosBancarios), [datosBancarios]);
   useEffect(()=>save("bb_premio",       configPremio),   [configPremio]);
+  useEffect(()=>save("bb_pin",          pinBarbero),     [pinBarbero]);
 
   const entrar = () => {
-    if(pinInput===PIN_BARBERO){ setVista("barbero"); setShowPin(false); setPinInput(""); setPinError(false); }
+    if(pinInput===pinBarbero){ setVista("barbero"); setShowPin(false); setPinInput(""); setPinError(false); }
     else { setPinError(true); setPinInput(""); }
   };
 
@@ -1506,6 +1535,7 @@ export default function App() {
         ubicaciones={ubicaciones} setUbicaciones={setUbicaciones}
         datosBancarios={datosBancarios} setDatosBancarios={setDatosBancarios}
         configPremio={configPremio} setConfigPremio={setConfigPremio}
+        pinBarbero={pinBarbero} setPinBarbero={setPinBarbero}
       />
     </div>
   );
