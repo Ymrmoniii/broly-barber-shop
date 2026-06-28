@@ -523,7 +523,7 @@ function VistaCliente({ servicios, citas, setCitas, agregarCita, horasDisponible
           {/* Premio fidelización */}
           {configPremio?.activo && (()=>{
             const telCliente = form.telefono.trim();
-            const visitasCliente = citas.filter(c=>c.telefono===telCliente&&c.estado!=="cancelada").length + 1;
+            const visitasCliente = citas.filter(c=>c.telefono===telCliente&&c.estado!=="cancelada").length;
             const meta = configPremio.visitas;
             const progreso = visitasCliente % meta;
             const ganoHoy = progreso === 0;
@@ -1148,7 +1148,7 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
               <Panel style={{ marginBottom:12 }}>
                 <SecTitle>📲 Datos para transferencia</SecTitle>
                 <p style={{ margin:"0 0 12px", fontSize:12, color:C.muted }}>El cliente los verá al elegir pago por transferencia.</p>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
                   {[
                     ["banco",    "Banco (ej: BancoEstado, Santander...)"],
                     ["nombre",   "Nombre del titular"],
@@ -1159,8 +1159,11 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                     <Field key={k} value={datosBancarios[k]||""} onChange={e=>setDatosBancarios(p=>({...p,[k]:e.target.value}))} placeholder={ph}/>
                   ))}
                 </div>
+                <Btn onClick={()=>{ save("bb_banco", datosBancarios); }} style={{ width:"100%", marginBottom:8 }}>
+                  💾 Guardar datos bancarios
+                </Btn>
                 {datosBancarios.banco && (
-                  <div style={{ marginTop:10, padding:"10px 12px", background:`${C.success}18`, borderRadius:9, border:`1px solid ${C.success}33`, fontSize:12, color:C.success }}>
+                  <div style={{ padding:"10px 12px", background:`${C.success}18`, borderRadius:9, border:`1px solid ${C.success}33`, fontSize:12, color:C.success }}>
                     ✅ Datos configurados — los clientes los verán al pagar por transferencia
                   </div>
                 )}
