@@ -131,7 +131,10 @@ function VistaCliente({ servicios, citas, setCitas, agregarCita, horasDisponible
   const totalTiempo = serviciosSel.reduce((s,id)=>{ const sv=servicios.find(x=>x.id===id); return s+(sv?.duracion||0); },0);
 
   const horasOcupadas = f => citas.filter(c=>c.fecha===f&&c.estado!=="cancelada").map(c=>c.hora);
-  const horasLibres   = f => horasDisponibles.filter(h=>!horasOcupadas(f).includes(h));
+  const horasLibres   = f => {
+    const horasDelDia = Array.isArray(horasDisponibles) ? horasDisponibles : (horasDisponibles[f] || []);
+    return horasDelDia.filter(h=>!horasOcupadas(f).includes(h));
+  };
 
   const toggleServicio = id => setServiciosSel(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
 
@@ -526,7 +529,7 @@ function VistaCliente({ servicios, citas, setCitas, agregarCita, horasDisponible
             const visitasCliente = citas.filter(c=>c.telefono===telCliente&&c.estado==="confirmada").length;
             const meta = configPremio.visitas;
             const progreso = visitasCliente % meta;
-            const ganoHoy = progreso === 0;
+            const ganoHoy = progreso === 0 && visitasCliente > 0;
             return (
               <div style={{ background:`${C.gold}18`, borderRadius:12, border:`1px solid ${C.gold}44`, padding:"14px 16px", marginBottom:20, textAlign:"left" }}>
                 {ganoHoy ? (
@@ -1227,19 +1230,112 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                 </div>
               </Panel>
 
-              <SecTitle>🕐 Horas de atención</SecTitle>
-              <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
-                {HORAS_DEFAULT.map(h=>{
-                  const activa=horasDisponibles.includes(h);
-                  return (
-                    <button key={h} onClick={()=>setHorasDisponibles(p=>activa?p.filter(x=>x!==h):[...p,h].sort())}
-                      style={{ padding:"8px 12px",borderRadius:8,border:`2px solid ${activa?C.gold:C.border}`,background:activa?`${C.gold}18`:C.bg,color:activa?C.gold:C.muted,fontWeight:activa?700:400,fontSize:13,cursor:"pointer",fontFamily:"inherit" }}>
-                      {h}
-                    </button>
-                  );
-                })}
-              </div>
-            </Panel>
+              {/* ── HORARIO SEMANAL POR DÍA ── */}
+              <Panel style={{ marginBottom:12 }}>
+                <SecTitle>🕐 Horario semanal</SecTitle>
+                <p style={{ margin:"0 0 14px", fontSize:12, color:C.muted }}>
+                  Configura qué horas atiendes cada día. Solo esas horas aparecerán para los clientes.
+                </p>
+
+                {/* Semana actual — 7 días desde hoy */}
+                {(()=>{
+                  const dias = [];
+                  const hoy = new Date(); hoy.setHours(0,0,0,0);
+                  // Ir al lunes de esta semana
+                  const lunes = new Date(hoy);
+                  const diaSemana = hoy.getDay();
+                  const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+                  lunes.setDate(hoy.getDate() + diffLunes);
+                  for(let i=0;i<7;i++){
+                    const d = new Date(lunes);
+                    d.setDate(lunes.getDate()+i);
+                    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+                    dias.push({ iso, label:`${DIAS_SEMANA[d.getDay()]} ${d.getDate()}` });
+                  }
+
+                  const TODAS_HORAS = [
+                    "08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
+                    "12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30",
+                    "16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00"
+                  ];
+
+                  return dias.map(({ iso, label }) => {
+                    const horasDelDia = horasDisponibles[iso] || [];
+                    const esPasado = iso < isoHoy();
+                    return (
+                      <div key={iso} style={{ marginBottom:14, opacity:esPasado?0.5:1 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                          <span style={{ fontWeight:700, fontSize:14, color:iso===isoHoy()?C.gold:C.white }}>
+                            {iso===isoHoy()?"⭐ ":""}{label}
+                          </span>
+                          <div style={{ display:"flex", gap:6 }}>
+                            <button onClick={()=>setHorasDisponibles(p=>({...p,[iso]:TODAS_HORAS}))}
+                              style={{ fontSize:11, color:C.gold, background:"none", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"3px 8px", cursor:"pointer", fontFamily:"inherit" }}>
+                              Todo
+                            </button>
+                            <button onClick={()=>setHorasDisponibles(p=>({...p,[iso]:[]}))}
+                              style={{ fontSize:11, color:C.muted, background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 8px", cursor:"pointer", fontFamily:"inherit" }}>
+                              Limpiar
+                            </button>
+                          </div>
+                        </div>
+                        {/* AM */}
+                        <div style={{ fontSize:10, color:C.muted, marginBottom:5, textTransform:"uppercase", letterSpacing:1 }}>AM</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:8 }}>
+                          {TODAS_HORAS.filter(h=>parseInt(h)<13).map(h=>{
+                            const activa = horasDelDia.includes(h);
+                            return (
+                              <button key={h} onClick={()=>{
+                                if(esPasado) return;
+                                setHorasDisponibles(p=>({
+                                  ...p,
+                                  [iso]: activa ? (p[iso]||[]).filter(x=>x!==h) : [...(p[iso]||[]),h].sort()
+                                }));
+                              }}
+                                style={{ padding:"6px 10px", borderRadius:7, fontSize:12, fontWeight:activa?700:400,
+                                  border:`2px solid ${activa?C.gold:C.border}`,
+                                  background:activa?`${C.gold}22`:C.bg,
+                                  color:activa?C.gold:C.muted,
+                                  cursor:esPasado?"not-allowed":"pointer", fontFamily:"inherit" }}>
+                                {h}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* PM */}
+                        <div style={{ fontSize:10, color:C.muted, marginBottom:5, textTransform:"uppercase", letterSpacing:1 }}>PM</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                          {TODAS_HORAS.filter(h=>parseInt(h)>=13).map(h=>{
+                            const activa = horasDelDia.includes(h);
+                            return (
+                              <button key={h} onClick={()=>{
+                                if(esPasado) return;
+                                setHorasDisponibles(p=>({
+                                  ...p,
+                                  [iso]: activa ? (p[iso]||[]).filter(x=>x!==h) : [...(p[iso]||[]),h].sort()
+                                }));
+                              }}
+                                style={{ padding:"6px 10px", borderRadius:7, fontSize:12, fontWeight:activa?700:400,
+                                  border:`2px solid ${activa?C.gold:C.border}`,
+                                  background:activa?`${C.gold}22`:C.bg,
+                                  color:activa?C.gold:C.muted,
+                                  cursor:esPasado?"not-allowed":"pointer", fontFamily:"inherit" }}>
+                                {h}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {horasDelDia.length>0 && (
+                          <div style={{ fontSize:11, color:C.success, marginTop:6 }}>
+                            ✓ {horasDelDia.length} hora{horasDelDia.length!==1?"s":""} disponible{horasDelDia.length!==1?"s":""}
+                          </div>
+                        )}
+                        <div style={{ height:1, background:C.border, marginTop:12 }}/>
+                      </div>
+                    );
+                  });
+                })()}
+              </Panel>
 
             {/* Días bloqueados */}
             <Panel style={{ marginBottom:12 }}>
@@ -1416,7 +1512,7 @@ export default function App() {
   };
   const [servicios,      setServicios]      = useState(()=>load("bb_servicios",SERVICIOS_DEFAULT));
   const [insumos,        setInsumos]        = useState(()=>load("bb_insumos",INSUMOS_DEFAULT));
-  const [horasDis,       setHorasDis]       = useState(()=>load("bb_horas",HORAS_DEFAULT));
+  const [horasDis,       setHorasDis]       = useState(()=>load("bb_horas",{}));
   const [diasBloq,       setDiasBloq]       = useState(()=>load("bb_diasbloq",[]));
   const [ubicaciones,    setUbicaciones]    = useState(()=>load("bb_ubicaciones",[]));
   const [datosBancarios, setDatosBancarios] = useState(()=>load("bb_banco",{
