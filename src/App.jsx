@@ -1,7 +1,30 @@
 import { useState, useEffect } from "react";
 
-const load = (k,fb) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch { return fb; } };
-const save = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} };
+// ── Supabase ──────────────────────────────────────────────
+const SUPA_URL = "https://swtzujdshvjhxrmjhjxg.supabase.co";
+const SUPA_KEY = "sb_publishable_FloqiQT_1Bp-7lTj2Vf2Vw_d6oKj4wt";
+
+const supaFetch = async (path, options={}) => {
+  const res = await fetch(`${SUPA_URL}/rest/v1${path}`, {
+    ...options,
+    headers: {
+      "apikey": SUPA_KEY,
+      "Authorization": `Bearer ${SUPA_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+      ...options.headers,
+    },
+  });
+  if (!res.ok) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
+};
+
+const getCitas = () => supaFetch("/citas?order=fecha,hora");
+const insertCita = (cita) => supaFetch("/citas", { method:"POST", body: JSON.stringify(cita) });
+const updateCita = (id, data) => supaFetch(`/citas?id=eq.${id}`, { method:"PATCH", body: JSON.stringify(data) });
+
+
 
 const C = {
   bg:"#0a0a0a", panel:"#111111", card:"#1a1a1a", border:"#2a2a2a",
@@ -90,7 +113,7 @@ function SecTitle({ children }) {
 }
 
 // ── VISTA CLIENTE ─────────────────────────────────────────
-function VistaCliente({ servicios, citas, setCitas, horasDisponibles, diasBloqueados, ubicaciones, datosBancarios, configPremio }) {
+function VistaCliente({ servicios, citas, setCitas, agregarCita, horasDisponibles, diasBloqueados, ubicaciones, datosBancarios, configPremio }) {
   const [paso, setPaso] = useState(1);
   const [fechaSel, setFechaSel] = useState(null);
   const [serviciosSel, setServiciosSel] = useState([]);
@@ -116,18 +139,21 @@ function VistaCliente({ servicios, citas, setCitas, horasDisponibles, diasBloque
   const irMes = d => setMesVista(p => { let m=p.m+d,a=p.a; if(m>11){m=0;a++;} if(m<0){m=11;a--;} return {m,a}; });
   const hoyIso = isoHoy();
 
-  const confirmar = () => {
+  const confirmar = async () => {
     if (!form.nombre.trim()||!form.telefono.trim()||serviciosSel.length===0) return;
     const svs = serviciosSel.map(id=>servicios.find(s=>s.id===id)).filter(Boolean);
-    setCitas(p=>[...p,{
+    const nuevaCita = {
       id:`c-${Date.now()}`, servicios:serviciosSel,
       servicioNombre:svs.map(s=>s.nombre).join(" + "),
       servicioEmoji:svs[0]?.emoji||"✂️",
       precio:totalPrecio, duracion:totalTiempo,
       fecha:fechaSel, hora:horaSel,
       nombre:form.nombre.trim(), telefono:form.telefono.trim(), nota:form.nota.trim(),
-      estado:"pendiente", metodoPago:metodoPago||"por_definir", pagoCon: metodoPago==="efectivo"?parseInt(pagoCon)||null:null, creadaEn:new Date().toISOString(),
-    }]);
+      estado:"pendiente", metodoPago:metodoPago||"por_definir",
+      pagoCon: metodoPago==="efectivo"?parseInt(pagoCon)||null:null,
+      creadaEn:new Date().toISOString(),
+    };
+    await agregarCita(nuevaCita);
     setPaso(5);
   };
 
@@ -538,7 +564,7 @@ function VistaCliente({ servicios, citas, setCitas, horasDisponibles, diasBloque
 }
 
 // ── DASHBOARD BARBERO ─────────────────────────────────────
-function DashboardBarbero({ citas, setCitas, servicios, setServicios, insumos, setInsumos, horasDisponibles, setHorasDisponibles, diasBloqueados, setDiasBloqueados, ubicaciones, setUbicaciones, datosBancarios, setDatosBancarios, configPremio, setConfigPremio }) {
+function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServicios, insumos, setInsumos, horasDisponibles, setHorasDisponibles, diasBloqueados, setDiasBloqueados, ubicaciones, setUbicaciones, datosBancarios, setDatosBancarios, configPremio, setConfigPremio }) {
   const [tab, setTab] = useState("hoy");
   const [nuevoServ, setNuevoServ] = useState({ nombre:"", precio:"", duracion:"", emoji:"✂️" });
   const [editServId, setEditServId] = useState(null);
@@ -598,7 +624,10 @@ function DashboardBarbero({ citas, setCitas, servicios, setServicios, insumos, s
   });
   const clientesFiltrados = clientes.filter(c=>c.nombre.toLowerCase().includes(clienteBuscar.toLowerCase())||c.telefono.includes(clienteBuscar));
 
-  const cambiarEstado = (id,estado,pago=null) => setCitas(p=>p.map(c=>c.id===id?{...c,estado,metodoPago:pago||c.metodoPago}:c));
+  const cambiarEstado = (id,estado,pago=null) => {
+    const cambios = { estado, ...(pago ? {metodoPago:pago} : {}) };
+    actualizarCita(id, cambios);
+  };
 
   const guardarServicio = () => {
     if(!nuevoServ.nombre||!nuevoServ.precio) return;
@@ -1316,7 +1345,41 @@ export default function App() {
   const [pinInput,       setPinInput]       = useState("");
   const [pinError,       setPinError]       = useState(false);
   const [showPin,        setShowPin]        = useState(false);
-  const [citas,          setCitas]          = useState(()=>{ const g=load("bb_citas",null); return(!g||g.length===0)?generarDemo():g; });
+  const [citas, setCitasState] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  // Cargar citas desde Supabase al iniciar
+  useEffect(() => {
+    getCitas().then(data => {
+      if (data) setCitasState(data);
+      setCargando(false);
+    });
+    // Recargar cada 30 segundos para sincronizar en tiempo real
+    const interval = setInterval(() => {
+      getCitas().then(data => { if (data) setCitasState(data); });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Wrapper para actualizar citas tanto en Supabase como en estado local
+  const setCitas = async (updater) => {
+    if (typeof updater === "function") {
+      setCitasState(prev => updater(prev));
+    } else {
+      setCitasState(updater);
+    }
+  };
+
+  const agregarCita = async (nuevaCita) => {
+    await insertCita(nuevaCita);
+    const data = await getCitas();
+    if (data) setCitasState(data);
+  };
+
+  const actualizarCita = async (id, cambios) => {
+    await updateCita(id, cambios);
+    setCitasState(prev => prev.map(c => c.id === id ? {...c, ...cambios} : c));
+  };
   const [servicios,      setServicios]      = useState(()=>load("bb_servicios",SERVICIOS_DEFAULT));
   const [insumos,        setInsumos]        = useState(()=>load("bb_insumos",INSUMOS_DEFAULT));
   const [horasDis,       setHorasDis]       = useState(()=>load("bb_horas",HORAS_DEFAULT));
@@ -1326,7 +1389,6 @@ export default function App() {
   const [configPremio,   setConfigPremio]   = useState(()=>load("bb_premio",{ visitas:10, premio:"Corte gratis", sorpresa:false, activo:true }));
 
   useEffect(()=>save("bb_vista",        vista),          [vista]);
-  useEffect(()=>save("bb_citas",        citas),          [citas]);
   useEffect(()=>save("bb_servicios",    servicios),      [servicios]);
   useEffect(()=>save("bb_insumos",      insumos),        [insumos]);
   useEffect(()=>save("bb_horas",        horasDis),       [horasDis]);
@@ -1410,7 +1472,7 @@ export default function App() {
         style={{ position:"fixed",top:12,left:12,zIndex:100,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 12px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
         ← Inicio
       </button>
-      <VistaCliente servicios={servicios} citas={citas} setCitas={setCitas} horasDisponibles={horasDis} diasBloqueados={diasBloq} ubicaciones={ubicaciones} datosBancarios={datosBancarios} configPremio={configPremio}/>
+      <VistaCliente servicios={servicios} citas={citas} setCitas={setCitas} agregarCita={agregarCita} horasDisponibles={horasDis} diasBloqueados={diasBloq} ubicaciones={ubicaciones} datosBancarios={datosBancarios} configPremio={configPremio}/>
     </div>
   );
 
@@ -1423,7 +1485,7 @@ export default function App() {
         ← Inicio
       </button>
       <DashboardBarbero
-        citas={citas} setCitas={setCitas}
+        citas={citas} setCitas={setCitas} actualizarCita={actualizarCita}
         servicios={servicios} setServicios={setServicios}
         insumos={insumos} setInsumos={setInsumos}
         horasDisponibles={horasDis} setHorasDisponibles={setHorasDis}
