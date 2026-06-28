@@ -523,7 +523,7 @@ function VistaCliente({ servicios, citas, setCitas, agregarCita, horasDisponible
           {/* Premio fidelización */}
           {configPremio?.activo && (()=>{
             const telCliente = form.telefono.trim();
-            const visitasCliente = citas.filter(c=>c.telefono===telCliente&&c.estado!=="cancelada").length;
+            const visitasCliente = citas.filter(c=>c.telefono===telCliente&&c.estado==="confirmada").length;
             const meta = configPremio.visitas;
             const progreso = visitasCliente % meta;
             const ganoHoy = progreso === 0;
@@ -611,10 +611,10 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
 
   // Historial de clientes únicos
   const clientesMap = {};
-  citas.filter(c=>c.estado!=="cancelada").forEach(c=>{
+  citas.filter(c=>c.estado==="confirmada").forEach(c=>{
     if(!clientesMap[c.telefono]) clientesMap[c.telefono]={ nombre:c.nombre, telefono:c.telefono, visitas:[], totalGastado:0 };
     clientesMap[c.telefono].visitas.push(c);
-    if(c.estado==="confirmada") clientesMap[c.telefono].totalGastado+=c.precio;
+    clientesMap[c.telefono].totalGastado+=c.precio;
   });
   const clientes = Object.values(clientesMap).sort((a,b)=>{
     if(ordenClientes==="visitas") return b.visitas.length-a.visitas.length;
@@ -1392,7 +1392,13 @@ export default function App() {
   const [horasDis,       setHorasDis]       = useState(()=>load("bb_horas",HORAS_DEFAULT));
   const [diasBloq,       setDiasBloq]       = useState(()=>load("bb_diasbloq",[]));
   const [ubicaciones,    setUbicaciones]    = useState(()=>load("bb_ubicaciones",[]));
-  const [datosBancarios, setDatosBancarios] = useState(()=>load("bb_banco",{banco:"",nombre:"",rut:"",cuenta:"",tipo:"Cuenta corriente"}));
+  const [datosBancarios, setDatosBancarios] = useState(()=>load("bb_banco",{
+    banco:"BancoEstado",
+    nombre:"Maxy Vega",
+    rut:"21.938.684-2",
+    cuenta:"21938684",
+    tipo:"Cuenta Vista"
+  }));
   const [configPremio,   setConfigPremio]   = useState(()=>load("bb_premio",{ visitas:10, premio:"Corte gratis", sorpresa:false, activo:true }));
 
   useEffect(()=>save("bb_vista",        vista),          [vista]);
