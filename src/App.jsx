@@ -597,7 +597,7 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
   const ingresoHoy    = citasHoy.filter(c=>c.estado==="confirmada").reduce((s,c)=>s+c.precio,0);
   const ingresoMes    = citasMes.reduce((s,c)=>s+c.precio,0);
   const costoInsumos  = insumos.reduce((s,i)=>s+i.costo*i.cantidad,0);
-  const gananciaNeta  = Math.max(0,ingresoMes-costoInsumos);
+  const gananciaNeta  = ingresoMes - costoInsumos;
 
   // Ticket promedio
   const ticketProm = citasMes.length>0 ? Math.round(ingresoMes/citasMes.length) : 0;
@@ -777,7 +777,7 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
         {/* ── HOY ── */}
         {tab==="hoy"&&(
           <>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12 }}>
               {[
                 {label:"Cortes hoy",   val:citasHoy.filter(c=>c.estado==="confirmada").length, color:C.gold},
                 {label:"Pendientes",   val:citasPend.filter(c=>c.fecha===hoy).length,           color:C.warning},
@@ -790,6 +790,59 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                 </Panel>
               ))}
             </div>
+
+            {/* Contador de clientes con metas */}
+            {(()=>{
+              const totalClientes = Object.keys(clientesMap).length;
+              const metas = [10,20,50,100,200,500];
+              const metaActual = metas.find(m=>totalClientes<m) || metas[metas.length-1];
+              const metaAnterior = metas[metas.indexOf(metaActual)-1] || 0;
+              const progreso = totalClientes - metaAnterior;
+              const total = metaActual - metaAnterior;
+              const pct = Math.min(100, Math.round(progreso/total*100));
+              const mensajes = {
+                10:  "¡Arrancando fuerte! 💪 Cada cliente cuenta.",
+                20:  "¡Ya van 20! La barbería está creciendo. 🚀",
+                50:  "¡50 clientes! Broly ya tiene su base. 🔥",
+                100: "¡100 clientes! Esto es un negocio serio. 👑",
+                200: "¡200 clientes! Broly es leyenda. 🏆",
+                500: "¡La barbería más famosa del barrio! ✂️⭐",
+              };
+              const logros = metas.filter(m=>totalClientes>=m);
+              return (
+                <Panel style={{ marginBottom:12, border:`1px solid ${C.gold}44` }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>👥 Clientes totales</div>
+                      <div style={{ fontSize:32, fontWeight:900, color:C.gold }}>{totalClientes}</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:11, color:C.muted }}>Meta</div>
+                      <div style={{ fontSize:20, fontWeight:700, color:C.goldL }}>{metaActual}</div>
+                    </div>
+                  </div>
+                  <div style={{ background:C.border, borderRadius:99, height:8, overflow:"hidden", marginBottom:8 }}>
+                    <div style={{ width:`${pct}%`, height:"100%", background:`linear-gradient(90deg,${C.goldD},${C.gold})`, borderRadius:99, transition:"width 0.5s" }}/>
+                  </div>
+                  <div style={{ fontSize:12, color:C.gold, marginBottom:6 }}>
+                    {totalClientes} de {metaActual} — faltan {metaActual-totalClientes} clientes
+                  </div>
+                  <div style={{ fontSize:12, color:C.mutedL, fontStyle:"italic" }}>
+                    "{mensajes[metaActual]}"
+                  </div>
+                  {logros.length>0&&(
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:10 }}>
+                      {logros.map(m=>(
+                        <span key={m} style={{ background:`${C.gold}22`, border:`1px solid ${C.gold}44`, borderRadius:8, padding:"3px 9px", fontSize:11, color:C.gold }}>
+                          🏆 {m} clientes
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </Panel>
+              );
+            })()}
+
             <SecTitle>Agenda de hoy — {fmtFecha(hoy)}</SecTitle>
             {citasHoy.length===0
               ? <div style={{ textAlign:"center",color:C.muted,padding:"30px 0",fontSize:14 }}>Sin citas para hoy ✂️</div>
@@ -816,7 +869,7 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12 }}>
               {[
                 {label:"Ingreso del mes",   val:fmtPrecio(ingresoMes),   color:C.success},
-                {label:"Ganancia neta",     val:fmtPrecio(gananciaNeta), color:C.goldL},
+                {label:"Ganancia neta",     val:fmtPrecio(gananciaNeta), color:gananciaNeta>=0?C.goldL:C.danger},
                 {label:"Ticket promedio",   val:fmtPrecio(ticketProm),   color:C.gold},
                 {label:"Cancelaciones mes", val:cancelasMes.length,      color:C.danger},
               ].map(s=>(
@@ -1048,12 +1101,21 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                         )}
                       </div>
                       {/* WhatsApp */}
-                      <button onClick={()=>{
-                        const txt=`Hola ${cl.nombre.split(" ")[0]}! 👋 Aquí Broly Barber. ¿Cuándo te vemos? Reserva tu hora en nuestro link. ✂️`;
-                        window.open(`https://wa.me/${cl.telefono.replace(/\D/g,"")}?text=${encodeURIComponent(txt)}`,"_blank");
-                      }} style={{ width:"100%",padding:"8px",background:"#25d36622",border:"1px solid #25d36644",borderRadius:8,color:"#25d366",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600 }}>
-                        📲 Enviar WhatsApp
-                      </button>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button onClick={()=>{
+                          const txt=`Hola ${cl.nombre.split(" ")[0]}! 👋 Aquí Broly Barber. ¿Cuándo te vemos? Reserva tu hora en nuestro link. ✂️`;
+                          window.open(`https://wa.me/${cl.telefono.replace(/\D/g,"")}?text=${encodeURIComponent(txt)}`,"_blank");
+                        }} style={{ flex:1,padding:"8px",background:"#25d36622",border:"1px solid #25d36644",borderRadius:8,color:"#25d366",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600 }}>
+                          📲 Enviar WhatsApp
+                        </button>
+                        <button onClick={()=>{
+                          if(confirm(`¿Eliminar a ${cl.nombre} de la lista de clientes?`)){
+                            setCitas(p=>p.filter(c=>c.telefono!==cl.telefono));
+                          }
+                        }} style={{ padding:"8px 12px",background:`${C.danger}18`,border:`1px solid ${C.danger}44`,borderRadius:8,color:C.danger,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600 }}>
+                          🗑️
+                        </button>
+                      </div>
                     </Panel>
                   );
                 })
@@ -1230,110 +1292,178 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                 </div>
               </Panel>
 
-              {/* ── HORARIO SEMANAL POR DÍA ── */}
+              {/* ── HORARIO MENSUAL POR DÍA ── */}
               <Panel style={{ marginBottom:12 }}>
-                <SecTitle>🕐 Horario semanal</SecTitle>
+                <SecTitle>🕐 Configurar horario</SecTitle>
                 <p style={{ margin:"0 0 14px", fontSize:12, color:C.muted }}>
-                  Configura qué horas atiendes cada día. Solo esas horas aparecerán para los clientes.
+                  Toca un día para configurar las horas que atiendes ese día. Solo esas horas verán los clientes.
                 </p>
 
-                {/* Semana actual — 7 días desde hoy */}
                 {(()=>{
-                  const dias = [];
-                  const hoy = new Date(); hoy.setHours(0,0,0,0);
-                  // Ir al lunes de esta semana
-                  const lunes = new Date(hoy);
-                  const diaSemana = hoy.getDay();
-                  const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
-                  lunes.setDate(hoy.getDate() + diffLunes);
-                  for(let i=0;i<7;i++){
-                    const d = new Date(lunes);
-                    d.setDate(lunes.getDate()+i);
-                    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-                    dias.push({ iso, label:`${DIAS_SEMANA[d.getDay()]} ${d.getDate()}` });
+                  const TODAS_HORAS = [];
+                  for(let h=0;h<24;h++){
+                    for(let m=0;m<60;m+=30){
+                      TODAS_HORAS.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+                    }
                   }
 
-                  const TODAS_HORAS = [
-                    "08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
-                    "12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30",
-                    "16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00"
-                  ];
+                  const [mesH, setMesH] = [mesVista, setMesVista];
+                  const [diaAbierto, setDiaAbierto] = useState(null);
+                  const numDias = diasEnMes(mesH.m, mesH.a);
+                  const inicio  = primerDia(mesH.m, mesH.a);
+                  const celdas  = [...Array(inicio).fill(null), ...Array.from({length:numDias},(_,i)=>i+1)];
+                  while(celdas.length%7!==0) celdas.push(null);
+                  const hoyStr = isoHoy();
 
-                  return dias.map(({ iso, label }) => {
-                    const horasDelDia = horasDisponibles[iso] || [];
-                    const esPasado = iso < isoHoy();
-                    return (
-                      <div key={iso} style={{ marginBottom:14, opacity:esPasado?0.5:1 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                          <span style={{ fontWeight:700, fontSize:14, color:iso===isoHoy()?C.gold:C.white }}>
-                            {iso===isoHoy()?"⭐ ":""}{label}
-                          </span>
-                          <div style={{ display:"flex", gap:6 }}>
-                            <button onClick={()=>setHorasDisponibles(p=>({...p,[iso]:TODAS_HORAS}))}
-                              style={{ fontSize:11, color:C.gold, background:"none", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"3px 8px", cursor:"pointer", fontFamily:"inherit" }}>
-                              Todo
-                            </button>
-                            <button onClick={()=>setHorasDisponibles(p=>({...p,[iso]:[]}))}
-                              style={{ fontSize:11, color:C.muted, background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 8px", cursor:"pointer", fontFamily:"inherit" }}>
-                              Limpiar
-                            </button>
-                          </div>
-                        </div>
-                        {/* AM */}
-                        <div style={{ fontSize:10, color:C.muted, marginBottom:5, textTransform:"uppercase", letterSpacing:1 }}>AM</div>
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:8 }}>
-                          {TODAS_HORAS.filter(h=>parseInt(h)<13).map(h=>{
-                            const activa = horasDelDia.includes(h);
-                            return (
-                              <button key={h} onClick={()=>{
-                                if(esPasado) return;
-                                setHorasDisponibles(p=>({
-                                  ...p,
-                                  [iso]: activa ? (p[iso]||[]).filter(x=>x!==h) : [...(p[iso]||[]),h].sort()
-                                }));
-                              }}
-                                style={{ padding:"6px 10px", borderRadius:7, fontSize:12, fontWeight:activa?700:400,
-                                  border:`2px solid ${activa?C.gold:C.border}`,
-                                  background:activa?`${C.gold}22`:C.bg,
-                                  color:activa?C.gold:C.muted,
-                                  cursor:esPasado?"not-allowed":"pointer", fontFamily:"inherit" }}>
-                                {h}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {/* PM */}
-                        <div style={{ fontSize:10, color:C.muted, marginBottom:5, textTransform:"uppercase", letterSpacing:1 }}>PM</div>
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                          {TODAS_HORAS.filter(h=>parseInt(h)>=13).map(h=>{
-                            const activa = horasDelDia.includes(h);
-                            return (
-                              <button key={h} onClick={()=>{
-                                if(esPasado) return;
-                                setHorasDisponibles(p=>({
-                                  ...p,
-                                  [iso]: activa ? (p[iso]||[]).filter(x=>x!==h) : [...(p[iso]||[]),h].sort()
-                                }));
-                              }}
-                                style={{ padding:"6px 10px", borderRadius:7, fontSize:12, fontWeight:activa?700:400,
-                                  border:`2px solid ${activa?C.gold:C.border}`,
-                                  background:activa?`${C.gold}22`:C.bg,
-                                  color:activa?C.gold:C.muted,
-                                  cursor:esPasado?"not-allowed":"pointer", fontFamily:"inherit" }}>
-                                {h}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {horasDelDia.length>0 && (
-                          <div style={{ fontSize:11, color:C.success, marginTop:6 }}>
-                            ✓ {horasDelDia.length} hora{horasDelDia.length!==1?"s":""} disponible{horasDelDia.length!==1?"s":""}
-                          </div>
-                        )}
-                        <div style={{ height:1, background:C.border, marginTop:12 }}/>
+                  return (
+                    <>
+                      {/* Nav mes */}
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                        <button onClick={()=>{ let m=mesH.m-1,a=mesH.a; if(m<0){m=11;a--;} setMesH({m,a}); }}
+                          style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,color:C.gold,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>‹</button>
+                        <span style={{ fontWeight:800, fontSize:15 }}>{MESES[mesH.m]} {mesH.a}</span>
+                        <button onClick={()=>{ let m=mesH.m+1,a=mesH.a; if(m>11){m=0;a++;} setMesH({m,a}); }}
+                          style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,color:C.gold,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>›</button>
                       </div>
-                    );
-                  });
+
+                      {/* Calendario */}
+                      <div style={{ background:C.bg, borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}`, marginBottom:12 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"#0a0a0a" }}>
+                          {DIAS_SEMANA.map(d=><div key={d} style={{ textAlign:"center", padding:"7px 0", fontSize:10, fontWeight:700, color:C.muted }}>{d}</div>)}
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)" }}>
+                          {celdas.map((dia,idx)=>{
+                            if(!dia) return <div key={`v-${idx}`} style={{ minHeight:44 }}/>;
+                            const iso = isoFecha(dia, mesH.m, mesH.a);
+                            const esPasado = iso < hoyStr;
+                            const esHoy = iso === hoyStr;
+                            const horasDelDia = horasDisponibles[iso] || [];
+                            const tieneHoras = horasDelDia.length > 0;
+                            const abierto = diaAbierto === iso;
+                            return (
+                              <div key={dia} onClick={()=>!esPasado&&setDiaAbierto(abierto?null:iso)}
+                                style={{ minHeight:44, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3,
+                                  cursor:esPasado?"default":"pointer", opacity:esPasado?0.3:1,
+                                  background:abierto?`${C.gold}22`:tieneHoras?`${C.success}0a`:"transparent",
+                                  borderBottom:`1px solid ${C.border}`, borderRight:idx%7!==6?`1px solid ${C.border}`:"none" }}>
+                                <div style={{ width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
+                                  background:esHoy?`linear-gradient(135deg,${C.gold},${C.goldD})`:abierto?`${C.gold}33`:"transparent",
+                                  color:esHoy?"#000":C.white, fontWeight:esHoy?800:400, fontSize:13 }}>
+                                  {dia}
+                                </div>
+                                {tieneHoras && <div style={{ width:6, height:6, borderRadius:"50%", background:C.success }}/>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Panel del día abierto */}
+                      {diaAbierto && (()=>{
+                        const horasDelDia = horasDisponibles[diaAbierto] || [];
+                        const esPasado = diaAbierto < hoyStr;
+                        const diaDate = new Date(diaAbierto+"T00:00");
+                        const label = `${DIAS_SEMANA[diaDate.getDay()]} ${diaDate.getDate()} de ${MESES[diaDate.getMonth()]}`;
+                        const toggleHora = (h) => {
+                          if(esPasado) return;
+                          setHorasDisponibles(p=>({
+                            ...p,
+                            [diaAbierto]: horasDelDia.includes(h)
+                              ? horasDelDia.filter(x=>x!==h)
+                              : [...horasDelDia, h].sort()
+                          }));
+                        };
+                        return (
+                          <div style={{ background:C.bg, borderRadius:12, border:`1px solid ${C.gold}55`, padding:14, marginBottom:8 }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                              <span style={{ fontWeight:800, fontSize:15, color:C.gold }}>📅 {label}</span>
+                              <div style={{ display:"flex", gap:6 }}>
+                                <button onClick={()=>setHorasDisponibles(p=>({...p,[diaAbierto]:TODAS_HORAS}))}
+                                  style={{ fontSize:11, color:C.gold, background:"none", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"4px 9px", cursor:"pointer", fontFamily:"inherit" }}>
+                                  Todo el día
+                                </button>
+                                <button onClick={()=>setHorasDisponibles(p=>({...p,[diaAbierto]:[]}))}
+                                  style={{ fontSize:11, color:C.muted, background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 9px", cursor:"pointer", fontFamily:"inherit" }}>
+                                  Limpiar
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Bloques horarios */}
+                            {[
+                              { label:"🌙 Madrugada", rango:[0,6] },
+                              { label:"☀️ Mañana",   rango:[6,12] },
+                              { label:"🌤 Mediodía", rango:[12,14] },
+                              { label:"🌇 Tarde",    rango:[14,20] },
+                              { label:"🌙 Noche",    rango:[20,24] },
+                            ].map(bloque=>{
+                              const horas = TODAS_HORAS.filter(h=>{
+                                const hr = parseInt(h.split(":")[0]);
+                                return hr>=bloque.rango[0] && hr<bloque.rango[1];
+                              });
+                              if(horas.length===0) return null;
+                              const todasActivas = horas.every(h=>horasDelDia.includes(h));
+                              return (
+                                <div key={bloque.label} style={{ marginBottom:12 }}>
+                                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                                    <span style={{ fontSize:12, color:C.mutedL }}>{bloque.label}</span>
+                                    <button onClick={()=>{
+                                      if(esPasado) return;
+                                      setHorasDisponibles(p=>{
+                                        const curr = p[diaAbierto]||[];
+                                        const nuevas = todasActivas
+                                          ? curr.filter(h=>!horas.includes(h))
+                                          : [...new Set([...curr,...horas])].sort();
+                                        return {...p,[diaAbierto]:nuevas};
+                                      });
+                                    }} style={{ fontSize:10, color:todasActivas?C.danger:C.gold, background:"none", border:`1px solid ${todasActivas?C.danger:C.gold}44`, borderRadius:5, padding:"2px 7px", cursor:"pointer", fontFamily:"inherit" }}>
+                                      {todasActivas?"Quitar todas":"Seleccionar todas"}
+                                    </button>
+                                  </div>
+                                  <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                                    {horas.map(h=>{
+                                      const activa = horasDelDia.includes(h);
+                                      return (
+                                        <button key={h} onClick={()=>toggleHora(h)}
+                                          style={{ padding:"7px 11px", borderRadius:7, fontSize:13, fontWeight:activa?700:400,
+                                            border:`2px solid ${activa?C.gold:C.border}`,
+                                            background:activa?`${C.gold}22`:C.bg,
+                                            color:activa?C.gold:C.muted,
+                                            cursor:esPasado?"not-allowed":"pointer", fontFamily:"inherit" }}>
+                                          {h}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {horasDelDia.length>0 && (
+                              <div style={{ fontSize:12, color:C.success, marginTop:6, fontWeight:600 }}>
+                                ✅ {horasDelDia.length} hora{horasDelDia.length!==1?"s":""} configurada{horasDelDia.length!==1?"s":""} para este día
+                              </div>
+                            )}
+                            {horasDelDia.length===0 && (
+                              <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>
+                                Sin horas — este día no estará disponible para clientes
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Leyenda */}
+                      <div style={{ display:"flex", gap:12, justifyContent:"center" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:C.muted }}>
+                          <div style={{ width:8,height:8,borderRadius:"50%",background:C.success }}/>Con horas
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:C.muted }}>
+                          <div style={{ width:8,height:8,borderRadius:"50%",background:C.border }}/>Sin horas
+                        </div>
+                      </div>
+                    </>
+                  );
                 })()}
               </Panel>
 
