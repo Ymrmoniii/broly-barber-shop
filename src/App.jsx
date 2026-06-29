@@ -570,7 +570,175 @@ function VistaCliente({ servicios, citas, setCitas, agregarCita, horasDisponible
   );
 }
 
-// ── DASHBOARD BARBERO ─────────────────────────────────────
+// ── Componente Horario Config ─────────────────────────────
+function HorarioConfig({ horasDisponibles, setHorasDisponibles }) {
+  const [mesVista, setMesVista] = useState(() => { const d=new Date(); return {m:d.getMonth(),a:d.getFullYear()}; });
+  const [diaAbierto, setDiaAbierto] = useState(null);
+
+  const TODAS_HORAS = [];
+  for(let h=0;h<24;h++){
+    for(let m=0;m<60;m+=30){
+      TODAS_HORAS.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+    }
+  }
+
+  const hoyStr = isoHoy();
+  const numDias = diasEnMes(mesVista.m, mesVista.a);
+  const inicio  = primerDia(mesVista.m, mesVista.a);
+  const celdas  = [...Array(inicio).fill(null), ...Array.from({length:numDias},(_,i)=>i+1)];
+  while(celdas.length%7!==0) celdas.push(null);
+
+  const horasDelDia = diaAbierto ? (horasDisponibles[diaAbierto] || []) : [];
+
+  const toggleHora = (h) => {
+    if(!diaAbierto) return;
+    setHorasDisponibles(p=>({
+      ...p,
+      [diaAbierto]: horasDelDia.includes(h)
+        ? horasDelDia.filter(x=>x!==h)
+        : [...horasDelDia, h].sort()
+    }));
+  };
+
+  const toggleBloque = (horas, todasActivas) => {
+    if(!diaAbierto) return;
+    setHorasDisponibles(p=>{
+      const curr = p[diaAbierto]||[];
+      const nuevas = todasActivas
+        ? curr.filter(h=>!horas.includes(h))
+        : [...new Set([...curr,...horas])].sort();
+      return {...p,[diaAbierto]:nuevas};
+    });
+  };
+
+  const bloques = [
+    { label:"🌙 Madrugada", rango:[0,6]   },
+    { label:"☀️ Mañana",    rango:[6,12]  },
+    { label:"🌤 Mediodía",  rango:[12,14] },
+    { label:"🌇 Tarde",     rango:[14,20] },
+    { label:"🌙 Noche",     rango:[20,24] },
+  ];
+
+  return (
+    <Panel style={{ marginBottom:12 }}>
+      <SecTitle>🕐 Configurar horario</SecTitle>
+      <p style={{ margin:"0 0 14px", fontSize:12, color:C.muted }}>
+        Toca un día para configurar las horas que atiendes. Solo esas horas verán los clientes.
+      </p>
+
+      {/* Nav mes */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+        <button onClick={()=>{ let m=mesVista.m-1,a=mesVista.a; if(m<0){m=11;a--;} setMesVista({m,a}); setDiaAbierto(null); }}
+          style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,color:C.gold,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>‹</button>
+        <span style={{ fontWeight:800, fontSize:15 }}>{MESES[mesVista.m]} {mesVista.a}</span>
+        <button onClick={()=>{ let m=mesVista.m+1,a=mesVista.a; if(m>11){m=0;a++;} setMesVista({m,a}); setDiaAbierto(null); }}
+          style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,color:C.gold,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>›</button>
+      </div>
+
+      {/* Calendario */}
+      <div style={{ background:C.bg, borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}`, marginBottom:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"#0a0a0a" }}>
+          {DIAS_SEMANA.map(d=><div key={d} style={{ textAlign:"center", padding:"7px 0", fontSize:10, fontWeight:700, color:C.muted }}>{d}</div>)}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)" }}>
+          {celdas.map((dia,idx)=>{
+            if(!dia) return <div key={`v-${idx}`} style={{ minHeight:44 }}/>;
+            const iso = isoFecha(dia, mesVista.m, mesVista.a);
+            const esPasado = iso < hoyStr;
+            const esHoy = iso === hoyStr;
+            const horasDia = horasDisponibles[iso] || [];
+            const tieneHoras = horasDia.length > 0;
+            const abierto = diaAbierto === iso;
+            return (
+              <div key={dia} onClick={()=>!esPasado&&setDiaAbierto(abierto?null:iso)}
+                style={{ minHeight:44, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3,
+                  cursor:esPasado?"default":"pointer", opacity:esPasado?0.3:1,
+                  background:abierto?`${C.gold}22`:tieneHoras?`${C.success}0a`:"transparent",
+                  borderBottom:`1px solid ${C.border}`, borderRight:idx%7!==6?`1px solid ${C.border}`:"none" }}>
+                <div style={{ width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
+                  background:esHoy?`linear-gradient(135deg,${C.gold},${C.goldD})`:abierto?`${C.gold}33`:"transparent",
+                  color:esHoy?"#000":C.white, fontWeight:esHoy?800:400, fontSize:13 }}>
+                  {dia}
+                </div>
+                {tieneHoras&&<div style={{ width:6,height:6,borderRadius:"50%",background:C.success }}/>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Panel día abierto */}
+      {diaAbierto && (
+        <div style={{ background:C.bg, borderRadius:12, border:`1px solid ${C.gold}55`, padding:14, marginBottom:8 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <span style={{ fontWeight:800, fontSize:14, color:C.gold }}>
+              📅 {(()=>{ const d=new Date(diaAbierto+"T00:00"); return `${DIAS_SEMANA[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`; })()}
+            </span>
+            <div style={{ display:"flex", gap:6 }}>
+              <button onClick={()=>setHorasDisponibles(p=>({...p,[diaAbierto]:TODAS_HORAS}))}
+                style={{ fontSize:11,color:C.gold,background:"none",border:`1px solid ${C.gold}44`,borderRadius:6,padding:"4px 9px",cursor:"pointer",fontFamily:"inherit" }}>
+                Todo el día
+              </button>
+              <button onClick={()=>setHorasDisponibles(p=>({...p,[diaAbierto]:[]}))}
+                style={{ fontSize:11,color:C.muted,background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 9px",cursor:"pointer",fontFamily:"inherit" }}>
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          {bloques.map(bloque=>{
+            const horas = TODAS_HORAS.filter(h=>{ const hr=parseInt(h); return hr>=bloque.rango[0]&&hr<bloque.rango[1]; });
+            if(horas.length===0) return null;
+            const todasActivas = horas.every(h=>horasDelDia.includes(h));
+            return (
+              <div key={bloque.label} style={{ marginBottom:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <span style={{ fontSize:12, color:C.mutedL }}>{bloque.label}</span>
+                  <button onClick={()=>toggleBloque(horas, todasActivas)}
+                    style={{ fontSize:10,color:todasActivas?C.danger:C.gold,background:"none",border:`1px solid ${todasActivas?C.danger:C.gold}44`,borderRadius:5,padding:"2px 7px",cursor:"pointer",fontFamily:"inherit" }}>
+                    {todasActivas?"Quitar":"Todas"}
+                  </button>
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                  {horas.map(h=>{
+                    const activa=horasDelDia.includes(h);
+                    return (
+                      <button key={h} onClick={()=>toggleHora(h)}
+                        style={{ padding:"7px 11px",borderRadius:7,fontSize:13,fontWeight:activa?700:400,
+                          border:`2px solid ${activa?C.gold:C.border}`,
+                          background:activa?`${C.gold}22`:C.bg,
+                          color:activa?C.gold:C.muted,
+                          cursor:"pointer",fontFamily:"inherit" }}>
+                        {h}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          <div style={{ fontSize:12, marginTop:6, fontWeight:600, color:horasDelDia.length>0?C.success:C.muted }}>
+            {horasDelDia.length>0
+              ? `✅ ${horasDelDia.length} hora${horasDelDia.length!==1?"s":""} configurada${horasDelDia.length!==1?"s":""}`
+              : "Sin horas — este día no estará disponible para clientes"}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:12, justifyContent:"center", marginTop:6 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.muted }}>
+          <div style={{ width:8,height:8,borderRadius:"50%",background:C.success }}/>Con horas
+        </div>
+        <div style={{ display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.muted }}>
+          <div style={{ width:8,height:8,borderRadius:"50%",background:C.border }}/>Sin horas
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+
 function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServicios, insumos, setInsumos, horasDisponibles, setHorasDisponibles, diasBloqueados, setDiasBloqueados, ubicaciones, setUbicaciones, datosBancarios, setDatosBancarios, configPremio, setConfigPremio, pinBarbero, setPinBarbero }) {
   const [tab, setTab] = useState("hoy");
   const [nuevoServ, setNuevoServ] = useState({ nombre:"", precio:"", duracion:"", emoji:"✂️" });
@@ -584,7 +752,6 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
   const [ubicForm, setUbicForm] = useState({ ciudad:"", desde:"", hasta:"" });
   const [pinForm, setPinForm] = useState({ actual:"", nuevo:"", confirmar:"" });
   const [pinMsg, setPinMsg] = useState(null);
-  const [diaAbierto, setDiaAbierto] = useState(null);
 
   const hoy = isoHoy();
   const mesActual = new Date().toISOString().slice(0,7);
@@ -1294,178 +1461,7 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
               </Panel>
 
               {/* ── HORARIO MENSUAL POR DÍA ── */}
-              <Panel style={{ marginBottom:12 }}>
-                <SecTitle>🕐 Configurar horario</SecTitle>
-                <p style={{ margin:"0 0 14px", fontSize:12, color:C.muted }}>
-                  Toca un día para configurar las horas que atiendes ese día. Solo esas horas verán los clientes.
-                </p>
-
-                {(()=>{
-                  const TODAS_HORAS = [];
-                  for(let h=0;h<24;h++){
-                    for(let m=0;m<60;m+=30){
-                      TODAS_HORAS.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
-                    }
-                  }
-
-                  const [mesH, setMesH] = [mesVista, setMesVista];
-                  const numDias = diasEnMes(mesH.m, mesH.a);
-                  const inicio  = primerDia(mesH.m, mesH.a);
-                  const celdas  = [...Array(inicio).fill(null), ...Array.from({length:numDias},(_,i)=>i+1)];
-                  while(celdas.length%7!==0) celdas.push(null);
-                  const hoyStr = isoHoy();
-
-                  return (
-                    <>
-                      {/* Nav mes */}
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                        <button onClick={()=>{ let m=mesH.m-1,a=mesH.a; if(m<0){m=11;a--;} setMesH({m,a}); }}
-                          style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,color:C.gold,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>‹</button>
-                        <span style={{ fontWeight:800, fontSize:15 }}>{MESES[mesH.m]} {mesH.a}</span>
-                        <button onClick={()=>{ let m=mesH.m+1,a=mesH.a; if(m>11){m=0;a++;} setMesH({m,a}); }}
-                          style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,color:C.gold,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>›</button>
-                      </div>
-
-                      {/* Calendario */}
-                      <div style={{ background:C.bg, borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}`, marginBottom:12 }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"#0a0a0a" }}>
-                          {DIAS_SEMANA.map(d=><div key={d} style={{ textAlign:"center", padding:"7px 0", fontSize:10, fontWeight:700, color:C.muted }}>{d}</div>)}
-                        </div>
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)" }}>
-                          {celdas.map((dia,idx)=>{
-                            if(!dia) return <div key={`v-${idx}`} style={{ minHeight:44 }}/>;
-                            const iso = isoFecha(dia, mesH.m, mesH.a);
-                            const esPasado = iso < hoyStr;
-                            const esHoy = iso === hoyStr;
-                            const horasDelDia = horasDisponibles[iso] || [];
-                            const tieneHoras = horasDelDia.length > 0;
-                            const abierto = diaAbierto === iso;
-                            return (
-                              <div key={dia} onClick={()=>!esPasado&&setDiaAbierto(abierto?null:iso)}
-                                style={{ minHeight:44, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3,
-                                  cursor:esPasado?"default":"pointer", opacity:esPasado?0.3:1,
-                                  background:abierto?`${C.gold}22`:tieneHoras?`${C.success}0a`:"transparent",
-                                  borderBottom:`1px solid ${C.border}`, borderRight:idx%7!==6?`1px solid ${C.border}`:"none" }}>
-                                <div style={{ width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
-                                  background:esHoy?`linear-gradient(135deg,${C.gold},${C.goldD})`:abierto?`${C.gold}33`:"transparent",
-                                  color:esHoy?"#000":C.white, fontWeight:esHoy?800:400, fontSize:13 }}>
-                                  {dia}
-                                </div>
-                                {tieneHoras && <div style={{ width:6, height:6, borderRadius:"50%", background:C.success }}/>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Panel del día abierto */}
-                      {diaAbierto && (()=>{
-                        const horasDelDia = horasDisponibles[diaAbierto] || [];
-                        const esPasado = diaAbierto < hoyStr;
-                        const diaDate = new Date(diaAbierto+"T00:00");
-                        const label = `${DIAS_SEMANA[diaDate.getDay()]} ${diaDate.getDate()} de ${MESES[diaDate.getMonth()]}`;
-                        const toggleHora = (h) => {
-                          if(esPasado) return;
-                          setHorasDisponibles(p=>({
-                            ...p,
-                            [diaAbierto]: horasDelDia.includes(h)
-                              ? horasDelDia.filter(x=>x!==h)
-                              : [...horasDelDia, h].sort()
-                          }));
-                        };
-                        return (
-                          <div style={{ background:C.bg, borderRadius:12, border:`1px solid ${C.gold}55`, padding:14, marginBottom:8 }}>
-                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                              <span style={{ fontWeight:800, fontSize:15, color:C.gold }}>📅 {label}</span>
-                              <div style={{ display:"flex", gap:6 }}>
-                                <button onClick={()=>setHorasDisponibles(p=>({...p,[diaAbierto]:TODAS_HORAS}))}
-                                  style={{ fontSize:11, color:C.gold, background:"none", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"4px 9px", cursor:"pointer", fontFamily:"inherit" }}>
-                                  Todo el día
-                                </button>
-                                <button onClick={()=>setHorasDisponibles(p=>({...p,[diaAbierto]:[]}))}
-                                  style={{ fontSize:11, color:C.muted, background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 9px", cursor:"pointer", fontFamily:"inherit" }}>
-                                  Limpiar
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Bloques horarios */}
-                            {[
-                              { label:"🌙 Madrugada", rango:[0,6] },
-                              { label:"☀️ Mañana",   rango:[6,12] },
-                              { label:"🌤 Mediodía", rango:[12,14] },
-                              { label:"🌇 Tarde",    rango:[14,20] },
-                              { label:"🌙 Noche",    rango:[20,24] },
-                            ].map(bloque=>{
-                              const horas = TODAS_HORAS.filter(h=>{
-                                const hr = parseInt(h.split(":")[0]);
-                                return hr>=bloque.rango[0] && hr<bloque.rango[1];
-                              });
-                              if(horas.length===0) return null;
-                              const todasActivas = horas.every(h=>horasDelDia.includes(h));
-                              return (
-                                <div key={bloque.label} style={{ marginBottom:12 }}>
-                                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                                    <span style={{ fontSize:12, color:C.mutedL }}>{bloque.label}</span>
-                                    <button onClick={()=>{
-                                      if(esPasado) return;
-                                      setHorasDisponibles(p=>{
-                                        const curr = p[diaAbierto]||[];
-                                        const nuevas = todasActivas
-                                          ? curr.filter(h=>!horas.includes(h))
-                                          : [...new Set([...curr,...horas])].sort();
-                                        return {...p,[diaAbierto]:nuevas};
-                                      });
-                                    }} style={{ fontSize:10, color:todasActivas?C.danger:C.gold, background:"none", border:`1px solid ${todasActivas?C.danger:C.gold}44`, borderRadius:5, padding:"2px 7px", cursor:"pointer", fontFamily:"inherit" }}>
-                                      {todasActivas?"Quitar todas":"Seleccionar todas"}
-                                    </button>
-                                  </div>
-                                  <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                                    {horas.map(h=>{
-                                      const activa = horasDelDia.includes(h);
-                                      return (
-                                        <button key={h} onClick={()=>toggleHora(h)}
-                                          style={{ padding:"7px 11px", borderRadius:7, fontSize:13, fontWeight:activa?700:400,
-                                            border:`2px solid ${activa?C.gold:C.border}`,
-                                            background:activa?`${C.gold}22`:C.bg,
-                                            color:activa?C.gold:C.muted,
-                                            cursor:esPasado?"not-allowed":"pointer", fontFamily:"inherit" }}>
-                                          {h}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-
-                            {horasDelDia.length>0 && (
-                              <div style={{ fontSize:12, color:C.success, marginTop:6, fontWeight:600 }}>
-                                ✅ {horasDelDia.length} hora{horasDelDia.length!==1?"s":""} configurada{horasDelDia.length!==1?"s":""} para este día
-                              </div>
-                            )}
-                            {horasDelDia.length===0 && (
-                              <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>
-                                Sin horas — este día no estará disponible para clientes
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Leyenda */}
-                      <div style={{ display:"flex", gap:12, justifyContent:"center" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:C.muted }}>
-                          <div style={{ width:8,height:8,borderRadius:"50%",background:C.success }}/>Con horas
-                        </div>
-                        <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:C.muted }}>
-                          <div style={{ width:8,height:8,borderRadius:"50%",background:C.border }}/>Sin horas
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </Panel>
+              <HorarioConfig horasDisponibles={horasDisponibles} setHorasDisponibles={setHorasDisponibles}/>
 
             {/* Días bloqueados */}
             <Panel style={{ marginBottom:12 }}>
