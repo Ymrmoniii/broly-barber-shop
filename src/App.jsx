@@ -584,6 +584,7 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
   const [ubicForm, setUbicForm] = useState({ ciudad:"", desde:"", hasta:"" });
   const [pinForm, setPinForm] = useState({ actual:"", nuevo:"", confirmar:"" });
   const [pinMsg, setPinMsg] = useState(null);
+  const [diaAbierto, setDiaAbierto] = useState(null);
 
   const hoy = isoHoy();
   const mesActual = new Date().toISOString().slice(0,7);
@@ -1308,7 +1309,6 @@ function DashboardBarbero({ citas, setCitas, actualizarCita, servicios, setServi
                   }
 
                   const [mesH, setMesH] = [mesVista, setMesVista];
-                  const [diaAbierto, setDiaAbierto] = useState(null);
                   const numDias = diasEnMes(mesH.m, mesH.a);
                   const inicio  = primerDia(mesH.m, mesH.a);
                   const celdas  = [...Array(inicio).fill(null), ...Array.from({length:numDias},(_,i)=>i+1)];
